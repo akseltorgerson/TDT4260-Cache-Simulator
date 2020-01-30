@@ -63,7 +63,7 @@ typedef struct {
          * is stored
          */
 
-        avdc_cache_line_t **lines; // make this a double poiner for a 2D array
+        avdc_cache_line_t **cache; // make this a double poiner for a 2D array
         /**
          * Cache parameters. Use avdc_resize() update them.
          *
