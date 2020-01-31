@@ -44,6 +44,11 @@ typedef struct avdc_cache_line avdc_cache_line_t;
  * Cache simulator instance variables
  */
 typedef struct {
+
+	// global counter to calculate least recently used //
+	int lruCounter;
+
+
         /**
          * Debug printing enabled?
          */
@@ -106,8 +111,7 @@ typedef struct {
  * @param block_size Cache block size in bytes
  * @param assoc Cache associativiy
  */
-avdark_cache_t *avdc_new(avdc_size_t size, avdc_block_size_t block_size,
-			 avdc_assoc_t assoc);
+avdark_cache_t *avdc_new(avdc_size_t size, avdc_block_size_t block_size, avdc_assoc_t assoc);
 /**
  * Destroy an instance of the cache simulator.
  *
@@ -128,8 +132,7 @@ void avdc_delete(avdark_cache_t *self);
  * @param assoc Cache associativiy
  * @return 0 on error, 1 on success
  */
-int avdc_resize(avdark_cache_t *self, avdc_size_t size,
-		avdc_block_size_t block_size, avdc_assoc_t assoc);
+int avdc_resize(avdark_cache_t *self, avdc_size_t size, avdc_block_size_t block_size, avdc_assoc_t assoc);
 
 /**
  * Debug printing. This function works just like printf but the first

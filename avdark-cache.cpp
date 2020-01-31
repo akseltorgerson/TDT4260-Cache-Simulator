@@ -27,6 +27,8 @@
 
 #define AVDC_MALLOC(nelems, type) (type *) MM_MALLOC(nelems, type)
 #define AVDC_FREE(p) MM_FREE(p)
+#warning "SIMICS DETECTED"
+break;
 
 #else
 
@@ -38,7 +40,7 @@
 /**
  * Cache block information.
  *
- * TODO: Fill in the data structure
+ * Fill in the data structure
  * HINT: You will probably need to change this structure
  */
 struct avdc_cache_line {
@@ -46,8 +48,6 @@ struct avdc_cache_line {
         int valid;
 	long counter; // perhaps this counter is what we need to change
 };
-
-//typedef avdc_cache_line_t* avdc_cache_set_t
 
 /**
  * Extract the cache line tag from a physical address.
@@ -76,11 +76,11 @@ static inline int index_from_pa(avdark_cache_t *self, avdc_pa_t pa) {
  */
 static int log2_int32(uint32_t value) {
         int i;
-
         for (i = 0; i < 32; i++) {
                 value >>= 1;
-                if (value == 0)
+                if (value == 0) {
                         break;
+		}
         }
         return i;
 }
@@ -111,19 +111,56 @@ void avdc_dbg_log(avdark_cache_t *self, const char *msg, ...) {
 void avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type) {
         /* TODO: Update this function */
         avdc_tag_t tag = tag_from_pa(self, pa);
-        int index = index_from_pa(self, pa);
-        int hit;
+        int setIndex = index_from_pa(self, pa); // this is essentially the set it corresponds to
+        int hit = 0;
+	avdc_cache_line_t *lru_line, *empty_line, *hit_line;
+	empty_line = NULL;
+	hit_line = NULL;
+	self->lruCounter++; // every access will end with either a hit or a block replacement, must update the counter each time
+	lru_line = &self->cache[setIndex][0];
 
-        hit = self->cache[index].valid && self->cache[index].tag == tag;
-        if (!hit) {
-                self->cache[index].valid = 1;
-                self->cache[index].tag = tag;
-        }
+	// TODO OPTIMIZE //
+	
+	for(unsigned int i = 0; i < self->assoc; i++) { // loop through all the lines in the set
+		if (self->cache[setIndex][i].valid) { // if the current block valid bit is 1, there must be A block there
+			if(self->cache[setIndex][i].tag == tag) { // if the tag matches
+				hit_line = &self->cache[setIndex][i]; // update the hit block
+			}
+
+			// update lru line if the value is the lowest
+			if(self->cache[setIndex][i].counter < lru_line->counter){
+				lru_line = &self->cache[setIndex][i];
+			}
+
+		} else { // cold miss if its not valid
+			empty_line = &self->cache[setIndex][i];
+			// keep track of the line that is not valid, we can add a new block there if no hit without eviction
+		}
+	}
+
+	if(hit_line != NULL) { // HIT
+		hit_line->counter = self->lruCounter;
+		hit = 1;
+	} else if (empty_line != NULL) { // COLD MISS
+		empty_line->valid = 1;
+		empty_line->tag = tag;
+		empty_line->counter = self->lruCounter;
+	} else { // CONFLICT MISS; must do an eviction
+		lru_line->tag = tag;
+		lru_line->counter = self->lruCounter;
+	}
+
+
+        //hit = self->cache[index].valid && self->cache[index].tag == tag;
+        //if (!hit) {
+        //        self->cache[index].valid = 1;
+        //        self->cache[index].tag = tag;
+        //}
 
         switch (type) {
         case AVDC_READ: /* Read accesses */
                 avdc_dbg_log(self, "read: pa: 0x%.16lx, tag: 0x%.16lx, index: %d, hit: %d\n",
-                             (unsigned long)pa, (unsigned long)tag, index, hit);
+                             (unsigned long)pa, (unsigned long)tag, setIndex, hit);
                 self->stat_data_read += 1;
                 if (!hit)
                         self->stat_data_read_miss += 1;
@@ -131,7 +168,7 @@ void avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type) {
 
         case AVDC_WRITE: /* Write accesses */
                 avdc_dbg_log(self, "write: pa: 0x%.16lx, tag: 0x%.16lx, index: %d, hit: %d\n",
-                             (unsigned long)pa, (unsigned long)tag, index, hit);
+                             (unsigned long)pa, (unsigned long)tag, setIndex, hit);
                 self->stat_data_write += 1;
                 if (!hit)
                         self->stat_data_write_miss += 1;
@@ -140,13 +177,12 @@ void avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type) {
 }
 
 void avdc_flush_cache(avdark_cache_t *self) {
-
-        /* TODO: Update this function */
+        /* Update this function */
         for (int i = 0; i < self->number_of_sets; i++) {
-		for (int j = 0; j < self->assoc; j++) {
+		for (unsigned int j = 0; j < self->assoc; j++) {
                 	self->cache[i][j].valid = 0;
                		self->cache[i][j].tag = 0;
-			self->cache[i][j].counter = 0; // Perhaps this is what they want //
+			self->cache[i][j].counter = 0; // Should loop through the entire cache and set every field //
 		}
 	}
 }
@@ -154,7 +190,7 @@ void avdc_flush_cache(avdark_cache_t *self) {
 int avdc_resize(avdark_cache_t *self, avdc_size_t size, 
 		avdc_block_size_t block_size, avdc_assoc_t assoc) {
 
-	/* TODO: Update this function */
+	/* Update this function */
         /* HINT: This function precomputes some common values and
          * allocates the self->lines array. You will need to update
          * this to reflect any changes to how this array is supposed
@@ -179,9 +215,13 @@ int avdc_resize(avdark_cache_t *self, avdc_size_t size,
         self->block_size_log2 = log2_int32(self->block_size);
         self->tag_shift = self->block_size_log2 + log2_int32(self->number_of_sets);
 
-        /* TODO(Re-)Allocate space for the tags array */
-        if (self->cache)
+        /* (Re-)Allocate space for the tags array */
+        if (self->cache) {
+		for(int i = 0; i < self->number_of_sets; i++){
+			AVDC_FREE(self->cache[i]);
+		}
                 AVDC_FREE(self->cache);
+	}
         /* HINT: If you change this, you may have to update
          * avdc_delete() to reflect changes to how thie self->lines
          * array is allocated. */
@@ -203,17 +243,15 @@ int avdc_resize(avdark_cache_t *self, avdc_size_t size,
 
 void avdc_print_info(avdark_cache_t *self) {
         fprintf(stderr, "Cache Info\n");
-        fprintf(stderr, "size: %d, assoc: %d, line-size: %d\n",
-                self->size, self->assoc, self->block_size);
+        fprintf(stderr, "size: %d, assoc: %d, line-size: %d\n", self->size, self->assoc, self->block_size);
 }
 
 void avdc_print_internals(avdark_cache_t *self) {
         fprintf(stderr, "Cache Internals\n");
         fprintf(stderr, "size: %d, assoc: %d, line-size: %d\n", self->size, self->assoc, self->block_size);
         for (int i = 0; i < self->number_of_sets; i++) {
-		for(int j = 0; j < self->assoc; j++) {
-               		fprintf(stderr, "tag: <0x%.16lx> valid: %d\n", (long unsigned int)self->cache[i][j].tag,
-                        self->cache[i][j].valid);
+		for(unsigned int j = 0; j < self->assoc; j++) {
+               		fprintf(stderr, "tag: <0x%.16lx> valid: %d\n", (long unsigned int)self->cache[i][j].tag, self->cache[i][j].valid);
 		}
 	}
 }
@@ -232,7 +270,7 @@ avdark_cache_t *avdc_new(avdc_size_t size, avdc_block_size_t block_size, avdc_as
 
         memset(self, 0, sizeof(*self));
         self->dbg = 0;
-
+	self->lruCounter = 0;
         if (!avdc_resize(self, size, block_size, assoc)) {
                 AVDC_FREE(self);
                 return NULL;
@@ -242,10 +280,12 @@ avdark_cache_t *avdc_new(avdc_size_t size, avdc_block_size_t block_size, avdc_as
 }
 
 void avdc_delete(avdark_cache_t *self) {
-        if (self->cache)
-                AVDC_FREE(self->cache);
-
-        AVDC_FREE(self);
+        if (self->cache) // if the cache pointer isnt null
+		for(int i = 0; i < self->number_of_sets; i++) { // loop through the entire array of sets
+			AVDC_FREE(self->cache[i]); // clear each set pointer
+		}
+                AVDC_FREE(self->cache); // free up the pointer to the sets
+        AVDC_FREE(self); // free up the cache pointer
 }
 
 /*
