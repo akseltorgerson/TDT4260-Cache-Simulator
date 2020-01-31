@@ -125,6 +125,7 @@ void avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type) {
 		if (self->cache[setIndex][i].valid) { // if the current block valid bit is 1, there must be A block there
 			if(self->cache[setIndex][i].tag == tag) { // if the tag matches
 				hit_line = &self->cache[setIndex][i]; // update the hit block
+				break;//stonks up
 			}
 
 			// update lru line if the value is the lowest
@@ -138,7 +139,7 @@ void avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type) {
 		}
 	}
 
-	if(hit_line != NULL) { // HIT
+	if(hit_line != NULL) { // HIT OR MISS; i guess they always miss huh
 		hit_line->counter = self->lruCounter;
 		hit = 1;
 	} else if (empty_line != NULL) { // COLD MISS

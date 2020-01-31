@@ -99,7 +99,7 @@ typedef struct {
          */
         int                stat_data_write;
         int                stat_data_write_miss;
-        int                stat_data_read;
+       	long                stat_data_read;
         int                stat_data_read_miss;
         /** @} */
 } avdark_cache_t;
