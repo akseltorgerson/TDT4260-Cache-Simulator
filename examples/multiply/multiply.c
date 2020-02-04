@@ -16,7 +16,8 @@
 #include <string.h>
 
 /* Size of the matrices to multiply */
-#define SIZE 1000
+#define SIZE 720
+#define min(a, b) (((a) < (b)) ? (a) : (b))
 
 /* HINT: The Makefile allows you to specify L1 and L2 block sizes as
  * compile time options.These may be specified when calling make,
@@ -43,6 +44,37 @@ matmul_opt()
          * here. It should calculate mat_c := mat_a * mat_b. See
          * matmul_ref() for a reference solution.
          */
+/*	
+	int i, j, k;
+ 
+ 	for (j = 0; j < SIZE; j++) { 
+  		for (i = 0; i < SIZE; i++) {
+  			for (k = 0; k < SIZE; k++) {
+ 				mat_ref[i][j] += mat_a[i][k] * mat_b[k][j];
+ 			}
+ 		}
+ 	}
+*/
+
+
+	int jj, kk, i, j, k, r, size;
+	int b = SIZE / 8;
+	size = SIZE;
+
+	for (jj = 0; jj < SIZE; jj += b) {
+		for (kk = 0; kk < SIZE; kk += b) {
+		        for(i = 0; i < SIZE; i++) {
+				for(j = jj; j < min(jj + b, size); j++) {
+			 		r = 0;
+					for(k = kk; k < min(kk+b, size); k++) {
+						r = r + mat_a[i][k] * mat_b[k][j];
+					}
+					mat_ref[i][j] += r;
+				}
+			}
+		}
+	}
+	
 }
 
 /**
